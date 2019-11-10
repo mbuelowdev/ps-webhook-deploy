@@ -1,0 +1,8 @@
+{
+  "description": "This is the place for your whitelisted repositories (full clone urls with .git at the end).",
+  "whitelist": [
+    "https://github.com/42Pollux/Testing.git",
+    "https://github.com/42Pollux/pollux-webhook.git",
+    "https://github.com/42Pollux/testing_npm.git"
+  ]
+}

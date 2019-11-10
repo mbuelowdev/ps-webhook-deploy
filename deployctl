@@ -1,0 +1,167 @@
+#!/bin/bash
+
+# Script to quickly add secrets to an application
+
+HOST="https://localhost/index.php"
+URL_SECRETS_ADD="$HOST/secrets/add"
+URL_SECRETS_PURGE="$HOST/secrets/purge"
+URL_DEPLOYMENTS_LIST="$HOST/deployments"
+URL_DEPLOYMENTS_UNDEPLOY="$HOST/deployments/undeploy"
+URL_DEPLOYMENTS_LINK="$HOST/deployments/link"
+URL_DEPLOYMENTS_UNLINK="$HOST/deployments/unlink"
+CREDENTIALS=""
+
+INCREMENT=1
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+GRAY='\033[0;90m'
+BOLD='\033[1;4m'
+NC='\033[0m'
+
+function listDeployment {
+    counter=1
+
+    echo -e "${BOLD}List of public and private deployments:${NC}"
+
+    curl -o .deployctltmpcurldata -sS --header "Content-Type: application/json" --header "Authorization: Basic $CREDENTIALS" --request GET $URL_DEPLOYMENTS_LIST
+    cat .deployctltmpcurldata | grep -o "{\"name\":\"[^}]*" | grep -o ":\".*" | grep -o "\".*" | while read -r line; do
+        echo -ne "$counter. "
+        echo "$line" | grep -o "[^\"]*[^\",:(visibility)]" | while read -r line; do
+            if [ "$line" = "public" ]; then
+                echo -ne " - ${GREEN}$line${NC}"
+            elif [ "$line" = "private" ]; then
+                echo -ne " - ${GRAY}$line${NC}"
+            elif [ "$line" = "none" ]; then
+                echo -ne " - ${RED}$line${NC}"
+            else
+                echo -ne "$line "
+            fi
+        done
+
+        counter=$(($counter + $INCREMENT))
+        echo ""
+    done
+
+    echo ""
+    rm -f ./.deployctltmpcurldata
+}
+
+function linkDeployment {
+    echo "Link deployment"
+    echo -ne "Name: "
+    read -e name
+    if [ -z "$name" ]; then
+        return
+    fi
+    PAYLOAD="{\"deploymentName\": \"$name\"}"
+    echo $PAYLOAD > .deployctltmpcurldata
+    curl -i --header "Content-Type: application/json" --header "Authorization: Basic $CREDENTIALS" --request POST --data-binary "@./.deployctltmpcurldata" $URL_DEPLOYMENTS_LINK
+    echo ""
+    rm -f ./.deployctltmpcurldata
+}
+
+function unlinkDeployment {
+    echo "Unlink deployment"
+    echo -ne "Name: "
+    read -e name
+    if [ -z "$name" ]; then
+        return
+    fi
+    PAYLOAD="{\"deploymentName\": \"$name\"}"
+    echo $PAYLOAD > .deployctltmpcurldata
+    curl -i --header "Content-Type: application/json" --header "Authorization: Basic $CREDENTIALS" --request POST --data-binary "@./.deployctltmpcurldata" $URL_DEPLOYMENTS_UNLINK
+    echo ""
+    rm -f ./.deployctltmpcurldata
+}
+
+
+function addSecrets {
+    echo "Adding secrets to"
+    echo -ne "Deployment: "
+    read -e deployment
+
+    PAYLOAD="{\"deploymentName\": \""
+    PAYLOAD+="$deployment"
+    PAYLOAD+="\", \"secrets\": ["
+    INNERPAYLOAD=""
+
+    echo "Enter secrets (leave empty to quit):"
+
+    while true; do
+        echo -ne "Key: "
+        read -e KEY
+
+        if [ -z "$KEY" ]; then
+            break;
+        fi
+
+        echo -ne "Value: "
+        read -e VALUE
+
+        if [ -n "$INNERPAYLOAD" ]; then
+            INNERPAYLOAD+=","
+        fi
+
+        INNERPAYLOAD+="[\"$KEY\",\"$VALUE\"]"
+    done
+
+    PAYLOAD+="$INNERPAYLOAD"
+    PAYLOAD+="]}"
+    echo $PAYLOAD > .deployctltmpcurldata
+    curl -i --header "Content-Type: application/json" --header "Authorization: Basic $CREDENTIALS" --request POST --data-binary "@./.deployctltmpcurldata" $URL_SECRETS_ADD
+    echo ""
+    rm -f ./.deployctltmpcurldata
+}
+
+function undeployDeployment {
+    echo "Undeploy deployment"
+    echo -ne "Name: "
+    read -e name
+    if [ -z "$name" ]; then
+        return
+    fi
+    PAYLOAD="{\"deploymentName\": \"$name\"}"
+    echo $PAYLOAD > .deployctltmpcurldata
+    curl -i --header "Content-Type: application/json" --header "Authorization: Basic $CREDENTIALS" --request POST --data-binary "@./.deployctltmpcurldata" $URL_DEPLOYMENTS_UNDEPLOY
+    echo ""
+    rm -f ./.deployctltmpcurldata
+}
+
+
+# Menu
+echo "Deployment Tool (ps-webhook-deployment) Version 1.0"
+echo "Lastest Version from: 2019-11-07 by 42Pollux"
+while true; do
+    echo "Choose one of the following actions:"
+    echo " [1] - List deployments"
+    echo " [2] - Link deployment"
+    echo " [3] - Unlink deployment"
+    echo " [4] - Add secrets"
+    echo " [5] - Undeploy deployment"
+    echo -ne "Select (any key to quit): "
+    read -e selection
+
+    case $selection in
+        1)
+            listDeployment
+            ;;
+        2)
+            linkDeployment
+            ;;
+        3)
+            unlinkDeployment
+            ;;
+        4)
+            addSecrets
+            ;;
+        5)
+            undeployDeployment
+            ;;
+        *)
+            exit 0
+            ;;
+    esac
+    echo -ne "Press ENTER to return to menu..."
+    read -e
+    clear
+done
